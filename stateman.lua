@@ -1,21 +1,23 @@
-local stateman = {}
+local StateManager = {}
+StateManager.__index = StateManager
 
-function stateman.load(first)
-  stateman.scene = first
-  stateman.scene.load()
+function StateManager.new(first)
+  local stateman = {}
+  setmetatable(stateman, StateManager)
+  return stateman
 end
 
-function stateman.next(next)
-  stateman.scene = next
-  stateman.scene.load()
+function StateManager:next(next)
+  self.scene = next
+  self.scene.load()
 end
 
-function stateman.update(dt)
-  stateman.scene.update(dt)
+function StateManager:update(dt)
+  self.scene.update(dt)
 end
 
-function stateman.draw()
-  stateman.scene.draw()
+function StateManager:draw()
+  self.scene.draw()
 end
 
-return stateman
+return StateManager

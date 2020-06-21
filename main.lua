@@ -1,7 +1,14 @@
-stateman = require("stateman")
-input = require("input")
+StateManager = require("stateman")
+InputManager = require("inputman")
 splash = require("splash")
 boardgame = require("boardgame")
+
+-- game global
+game = {
+  canvas = nil,
+  state = StateManager.new(),
+  input = InputManager.new(),
+}
 
 function math.round(n, deci)
   deci = 10^(deci or 0)
@@ -9,7 +16,7 @@ function math.round(n, deci)
 end
 
 function love.load()
-  font = love.graphics.newImageFont("font.png",
+  font = love.graphics.newImageFont("gfx/font.png",
   " abcdefghijklmnopqrstuvwxyz" ..
   "ABCDEFGHIJKLMNOPQRSTUVWXYZ0" ..
   "123456789.,!?-+/():;%&`'*#=[]\"")
@@ -17,18 +24,29 @@ function love.load()
 
   love.window.setMode(320, 288, {resizable=false, vsync=true})
   love.graphics.setDefaultFilter("nearest", "nearest", 0)
-  canvas = love.graphics.newCanvas(160, 144)
-  stateman.load(splash)
-  --stateman.load(boardgame)
+
+  game.canvas = love.graphics.newCanvas(160, 144)
+
+  -- Set initial state.
+  --game.state:next(splash)
+  game.state:next(boardgame)
+end
+
+function love.keypressed(key, scancode, isrepeat)
+  game.input:onKeyPressed(key, scancode, isrepeat)
+end
+
+function love.keyreleased(key, scancode)
+  game.input:onKeyReleased(key, scancode)
 end
 
 function love.update(dt)
-  stateman.update(dt)
-  input.update(dt)
+  game.state:update(dt)
+  game.input:update(dt)
 end
 
 function love.draw()
   love.graphics.clear(1, 1, 1)
   love.graphics.setColor(1, 1, 1, 1)
-  stateman.draw()
+  game.state:draw()
 end

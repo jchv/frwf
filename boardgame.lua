@@ -1,3 +1,6 @@
+local Camera = require("camera")
+local MapGraph = require("mapgraph")
+local BoardPlayer = require("boardplayer")
 local boardgame = {}
 local map = require("map")
 
@@ -11,8 +14,10 @@ local goodhit = nil
 local badhit = nil
 
 -- data
-local boredisle = require("boredisle")
-local camera = map.newCamera(0, 0)
+local boredisle = require("data/boredisle.map")
+local camera = Camera.new(0, 0)
+local graph = MapGraph.new(boredisle)
+local players = {}
 
 function boardgame.load()
   boardgame.t = 0
@@ -20,16 +25,22 @@ function boardgame.load()
   boardgame.statet = 0
   boardgame.player = 1
 
-  tileset = map.loadtiles("tileset.png", 32, 32)
-  cursorimg = love.graphics.newImage("cursor.png")
+  tileset = map.loadtiles("gfx/tileset.png", 32, 32)
+  cursorimg = love.graphics.newImage("gfx/cursor.png")
 
-  normalhit = love.audio.newSource("normalhit.wav", "static")
-  goodhit = love.audio.newSource("goodhit.wav", "static")
-  badhit = love.audio.newSource("badhit.wav", "static")
+  normalhit = love.audio.newSource("sfx/normalhit.wav", "static")
+  goodhit = love.audio.newSource("sfx/goodhit.wav", "static")
+  badhit = love.audio.newSource("sfx/badhit.wav", "static")
 
-  bgm = love.audio.newSource("nihilism.wav", "stream")
+  bgm = love.audio.newSource("bgm/nihilism.wav", "stream")
   bgm:setLooping(true)
   bgm:play()
+
+  camera:setCoords({x = (boredisle.width * tileset.tilew) / 2, y = (boredisle.height * tileset.tileh) / 2})
+
+  for i = 1, 4 do
+    players[i] = BoardPlayer.new(i, graph.playerOrigins[i])
+  end
 end
 
 function boardgame.setstate(state)
@@ -46,22 +57,32 @@ function boardgame.setuproll()
   end
 end
 
+function boardgame.panToPlayer()
+  local coords = players[boardgame.player]:getMapCoords(tileset)
+  coords.x = coords.x + tileset.tilew / 2
+  coords.y = coords.y + tileset.tileh / 2 - 40
+  camera:panToCoords(coords)
+end
+
 function boardgame.update(dt)
-  camera:update(dt)
-  boardgame.t = boardgame.t + dt
-  boardgame.statet = boardgame.statet + dt
+  local oldState = boardgame.state
 
   if boardgame.state == "fadein" then
-    if boardgame.statet >= 1 then
+    if boardgame.statet == 0 then
+      camera:panToCoords({x = 80, y = 76}, 3)
+    end
+    if boardgame.statet >= 3 then
       boardgame.setstate("nextplayer")
     end
   elseif boardgame.state == "nextplayer" then
+    if boardgame.statet == 0 then
+      boardgame.panToPlayer()
+    end
     if boardgame.statet >= 1 then
       boardgame.setstate("waitplayer")
-      camera:panToCoords(6 * 32 + 16, 8 * 32 + 16)
     end
   elseif boardgame.state == "waitplayer" then
-    if input.p[boardgame.player].a == -1 or input.p[boardgame.player].b == -1 then
+    if game.input.p[boardgame.player].a == -1 or game.input.p[boardgame.player].b == -1 then
       boardgame.setstate("waitfade")
     end
   elseif boardgame.state == "waitfade" then
@@ -75,7 +96,7 @@ function boardgame.update(dt)
     end
     boardgame.cursorpos = boardgame.statet * 142
   elseif boardgame.state == "roll" then
-    if input.p[boardgame.player].a == 1 then
+    if game.input.p[boardgame.player].a == 1 then
       if boardgame.cursorpos > boardgame.greenpos and boardgame.cursorpos < boardgame.greenpos + 8 then
         goodhit:play()
         boardgame.hittype = "good"
@@ -98,13 +119,28 @@ function boardgame.update(dt)
       boardgame.setstate("move")
     end
   elseif boardgame.state == "move" then
-    if boardgame.statet >= 1 then
-      boardgame.statet = 0
-      if boardgame.hitval >= 1 then
+    if boardgame.hitval > 0 then
+      local player = players[boardgame.player]
+      local status = player:getStatus(graph)
+      if status == "hop" then
+        player:hopNearby(graph)
         boardgame.hitval = boardgame.hitval - 1
-      else
-        boardgame.setstate("moveend")
+      elseif status == "move" then
+        player:move(graph, 1)
+        boardgame.hitval = boardgame.hitval - 1
+      elseif status == "pick" then
+        -- temporary
+        player:move(graph, 1)
+        boardgame.hitval = boardgame.hitval - 1
+      elseif status == "busy" then
+        player:update(dt)
       end
+      local coords = player:getMapCoords(tileset)
+      coords.x = coords.x + tileset.tilew / 2
+      coords.y = coords.y + tileset.tileh / 2 - 40
+      camera:setCoords(coords)
+    else
+      boardgame.setstate("moveend")
     end
   elseif boardgame.state == "moveend" then
     if boardgame.statet >= 1 then
@@ -115,6 +151,19 @@ function boardgame.update(dt)
         boardgame.setstate("selectgame")
       end
     end
+  elseif boardgame.state == "selectgame" then
+    if boardgame.statet >= 1 then
+      boardgame.player = 1
+      boardgame.setstate("nextplayer")
+    end
+  end
+
+  camera:update(dt)
+  boardgame.t = boardgame.t + dt
+
+  -- do not increment statet for new states.
+  if boardgame.state == oldState then
+    boardgame.statet = boardgame.statet + dt
   end
 end
 
@@ -165,12 +214,18 @@ end
 
 function boardgame.draw()
   local screenshake = 0
-  love.graphics.setCanvas(canvas)
+  love.graphics.setCanvas(game.canvas)
   love.graphics.setColor(1, 1, 1, 1)
   love.graphics.clear(0.5, 0.5, 0.5, 1)
   love.graphics.setBlendMode("alpha")
 
-  map.drawmap(boredisle, tileset, camera:getMapX(), camera:getMapY())
+  local mx = camera:getMapX()
+  local my = camera:getMapY()
+
+  map.drawmap(boredisle, tileset, mx, my)
+  for i = 1, 4 do
+    players[i]:draw(tileset, mx, my)
+  end
 
   if boardgame.state == "fadein" then
     local a = math.round((1 - boardgame.statet) * 8) / 8
@@ -215,7 +270,7 @@ function boardgame.draw()
     x = math.random() * screenshake - screenshake / 2
     y = math.random() * screenshake - screenshake / 2
   end
-  love.graphics.draw(canvas, x, y, 0, 2)
+  love.graphics.draw(game.canvas, x, y, 0, 2)
 end
 
 return boardgame
