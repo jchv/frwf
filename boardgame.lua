@@ -59,12 +59,15 @@ function boardgame.update(dt)
       if boardgame.cursorpos > boardgame.greenpos and boardgame.cursorpos < boardgame.greenpos + 8 then
         goodhit:play()
         boardgame.hittype = "good"
+        boardgame.hitval = love.math.random(7, 10)
       elseif boardgame.cursorpos > boardgame.redpos and boardgame.cursorpos < boardgame.redpos + 8 then
         badhit:play()
         boardgame.hittype = "bad"
+        boardgame.hitval = love.math.random(1, 3)
       else
         normalhit:play()
         boardgame.hittype = "normal"
+        boardgame.hitval = love.math.random(3, 7)
       end
       boardgame.setstate("rollhit")
     else
@@ -112,6 +115,12 @@ function boardgame.drawroll(a, hit)
   love.graphics.draw(cursorimg, 4 + boardgame.cursorpos, 68 - yoff)
 end
 
+function boardgame.drawhit(a)
+  local str = string.format("%d", boardgame.hitval)
+  love.graphics.setColor(1, 1, 1, a)
+  love.graphics.printf(str, 0, 50, 160, "center")
+end
+
 function boardgame.draw()
   local screenshake = 0
   love.graphics.setCanvas(canvas)
@@ -129,16 +138,19 @@ function boardgame.draw()
     boardgame.drawroll(1, false)
   elseif boardgame.state == "rollhit" then
     boardgame.drawroll(1 - boardgame.statet, true)
+    boardgame.drawhit(1)
     local a = math.round((1 - boardgame.statet) * 8) / 8
     if boardgame.hittype == "good" then
       love.graphics.setColor(0.5, 1, 0.5, a)
+      screenshake = (1 - boardgame.statet) * 15
     elseif boardgame.hittype == "bad" then
       love.graphics.setColor(1, 0.5, 0.5, a)
+      screenshake = (1 - boardgame.statet) * 5
     else
       love.graphics.setColor(1, 1, 1, a)
+      screenshake = (1 - boardgame.statet) * 10
     end
     love.graphics.rectangle("fill", 0, 0, 160, 144)
-    screenshake = (1 - boardgame.statet) * 15
   elseif boardgame.state == "move" then
   elseif boardgame.state == "nextplayer" then
   elseif boardgame.state == "selectgame" then
