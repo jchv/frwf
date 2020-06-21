@@ -1,7 +1,8 @@
 local boardgame = {}
+local map = require("map")
 
 -- gfx
-local boardimg = nil
+local tileset = nil
 local cursorimg = nil
 
 -- sfx
@@ -9,17 +10,26 @@ local normalhit = nil
 local goodhit = nil
 local badhit = nil
 
+-- data
+local boredisle = require("boredisle")
+local camera = map.newCamera(0, 0)
+
 function boardgame.load()
   boardgame.t = 0
-  boardgame.state = "waitplayer"
+  boardgame.state = "fadein"
   boardgame.statet = 0
   boardgame.player = 1
-  boardimg = love.graphics.newImage("splash.png")
+
+  tileset = map.loadtiles("tileset.png", 32, 32)
   cursorimg = love.graphics.newImage("cursor.png")
 
   normalhit = love.audio.newSource("normalhit.wav", "static")
   goodhit = love.audio.newSource("goodhit.wav", "static")
   badhit = love.audio.newSource("badhit.wav", "static")
+
+  bgm = love.audio.newSource("nihilism.wav", "stream")
+  bgm:setLooping(true)
+  bgm:play()
 end
 
 function boardgame.setstate(state)
@@ -37,10 +47,20 @@ function boardgame.setuproll()
 end
 
 function boardgame.update(dt)
+  camera:update(dt)
   boardgame.t = boardgame.t + dt
   boardgame.statet = boardgame.statet + dt
 
-  if boardgame.state == "waitplayer" then
+  if boardgame.state == "fadein" then
+    if boardgame.statet >= 1 then
+      boardgame.setstate("nextplayer")
+    end
+  elseif boardgame.state == "nextplayer" then
+    if boardgame.statet >= 1 then
+      boardgame.setstate("waitplayer")
+      camera:panToCoords(6 * 32 + 16, 8 * 32 + 16)
+    end
+  elseif boardgame.state == "waitplayer" then
     if input.p[boardgame.player].a == -1 or input.p[boardgame.player].b == -1 then
       boardgame.setstate("waitfade")
     end
@@ -73,6 +93,28 @@ function boardgame.update(dt)
     else
       boardgame.cursorpos = 71 * math.cos(boardgame.statet * 5) + 71
     end
+  elseif boardgame.state == "rollhit" then
+    if boardgame.statet >= 2 then
+      boardgame.setstate("move")
+    end
+  elseif boardgame.state == "move" then
+    if boardgame.statet >= 1 then
+      boardgame.statet = 0
+      if boardgame.hitval >= 1 then
+        boardgame.hitval = boardgame.hitval - 1
+      else
+        boardgame.setstate("moveend")
+      end
+    end
+  elseif boardgame.state == "moveend" then
+    if boardgame.statet >= 1 then
+      if boardgame.player < 4 then
+        boardgame.player = boardgame.player + 1
+        boardgame.setstate("nextplayer")
+      else
+        boardgame.setstate("selectgame")
+      end
+    end
   end
 end
 
@@ -80,7 +122,7 @@ function boardgame.drawstart(a)
   local str = string.format("Player %d GO!", boardgame.player)
   local yoff = math.round(math.sin(boardgame.t) * 10)
   a = math.round(a * 8) / 8
-  love.graphics.setColor(0, 0, 0, a)
+  love.graphics.setColor(0, 0, 0, a / 2)
   love.graphics.rectangle("fill", 0, 39 + yoff, 160, 45 - math.cos(boardgame.t) * 5)
   yoff = math.round(math.sin(boardgame.t + 0.5) * 10)
   love.graphics.setColor(1, 1, 1, a)
@@ -128,7 +170,15 @@ function boardgame.draw()
   love.graphics.clear(0.5, 0.5, 0.5, 1)
   love.graphics.setBlendMode("alpha")
 
-  if boardgame.state == "waitplayer" then
+  map.drawmap(boredisle, tileset, camera:getMapX(), camera:getMapY())
+
+  if boardgame.state == "fadein" then
+    local a = math.round((1 - boardgame.statet) * 8) / 8
+    love.graphics.setColor(0, 0, 0, a)
+    love.graphics.rectangle("fill", 0, 0, 160, 144)
+  elseif boardgame.state == "nextplayer" then
+    boardgame.drawstart(boardgame.statet)
+  elseif boardgame.state == "waitplayer" then
     boardgame.drawstart(1)
   elseif boardgame.state == "waitfade" then
     boardgame.drawstart(1 - boardgame.statet)
@@ -152,7 +202,7 @@ function boardgame.draw()
     end
     love.graphics.rectangle("fill", 0, 0, 160, 144)
   elseif boardgame.state == "move" then
-  elseif boardgame.state == "nextplayer" then
+    boardgame.drawhit(1)
   elseif boardgame.state == "selectgame" then
   end
   local t = boardgame.t

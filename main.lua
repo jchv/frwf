@@ -18,12 +18,8 @@ function love.load()
   love.window.setMode(320, 288, {resizable=false, vsync=true})
   love.graphics.setDefaultFilter("nearest", "nearest", 0)
   canvas = love.graphics.newCanvas(160, 144)
-  -- stateman.load(splash)
-  stateman.load(boardgame)
-
-  -- bgm = love.audio.newSource("nihility.wav", "stream")
-  -- bgm:setLooping(true)
-  -- bgm:play()
+  stateman.load(splash)
+  --stateman.load(boardgame)
 end
 
 function love.update(dt)

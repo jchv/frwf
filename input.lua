@@ -13,13 +13,17 @@ end
 
 function input.buttondown(i, button)
   if input.p[i][button] <= 0 then
-    input.p[i][button] = 1
+    for i = 1, 4 do
+      input.p[i][button] = 1
+    end
   end
 end
 
 function input.buttonup(i, button)
   if input.p[i][button] >= 0 then
-    input.p[i][button] = -1
+    for i = 1, 4 do
+      input.p[i][button] = -1
+    end
   end
 end
 
