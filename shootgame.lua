@@ -179,15 +179,16 @@ function ShootGame:update(dt)
       game.host:broadcast(json.encode({ message = "frameInput", player = game.selfPlayer, frameInput = myFrameInput }))
       frameInput[game.selfPlayer] = myFrameInput
 
+      local haveInputFrom = 1
       if self.nextFrameInput then
         for i, input in pairs(self.nextFrameInput) do
           frameInput[i] = input
+          haveInputFrom = haveInputFrom + 1
         end
         self.nextFrameInput = nil
       end
 
       -- Receive other player's frame input.
-      local haveInputFrom = 1
       while haveInputFrom < game.numPlayers do
         local event = game.host:service(1)
         while event do
