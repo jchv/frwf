@@ -1,199 +1,258 @@
+local BoardGame = {}
+BoardGame.__index = BoardGame
+
 local Camera = require("camera")
 local MapGraph = require("mapgraph")
 local BoardPlayer = require("boardplayer")
-local boardgame = {}
-local map = require("map")
+local TileSet = require("tileset")
 
--- gfx
-local tileset = nil
-local cursorimg = nil
+local badhitLen = 12
+local goodhitLen = 6
 
--- sfx
-local normalhit = nil
-local goodhit = nil
-local badhit = nil
+function BoardGame.new()
+  local boardgame = {
+    t = 0,
+    state = "fadein",
+    statet = 0,
+    curPlayer = 1,
+    numPlayers = 2,
+    players = {},
+  }
 
--- data
-local boredisle = require("data/boredisle.map")
-local camera = Camera.new(0, 0)
-local graph = MapGraph.new(boredisle)
-local players = {}
+  setmetatable(boardgame, BoardGame)
 
-function boardgame.load()
-  boardgame.t = 0
-  boardgame.state = "fadein"
-  boardgame.statet = 0
-  boardgame.player = 1
+  return boardgame
+end
 
-  tileset = map.loadtiles("gfx/tileset.png", 32, 32)
-  cursorimg = love.graphics.newImage("gfx/cursor.png")
+function BoardGame:load()
+  if self.assets == nil then
+    self.assets = {}
 
-  normalhit = love.audio.newSource("sfx/normalhit.wav", "static")
-  goodhit = love.audio.newSource("sfx/goodhit.wav", "static")
-  badhit = love.audio.newSource("sfx/badhit.wav", "static")
+    -- gfx
+    self.assets.tileset = TileSet.new("gfx/tileset.png", 32, 32)
+    self.assets.cursorimg = love.graphics.newImage("gfx/cursor.png")
+    
+    -- sfx
+    self.assets.normalhit = love.audio.newSource("sfx/normalhit.wav", "static")
+    self.assets.goodhit = love.audio.newSource("sfx/goodhit.wav", "static")
+    self.assets.badhit = love.audio.newSource("sfx/badhit.wav", "static")
+    self.assets.jump = love.audio.newSource("sfx/jump.wav", "static")
+    self.assets.walk = love.audio.newSource("sfx/walk.wav", "static")
+    self.assets.walk:setLooping(true)
+    
+    -- bgm
+    self.assets.bgm = love.audio.newSource("bgm/nihilism.wav", "stream")
+    self.assets.bgm:setLooping(true)
+    self.assets.bgm:play()
+    
+    -- data
+    self.assets.map = require("data/boredisle.map")
+    self.graph = MapGraph.new(self.assets.map)
+  end
 
-  bgm = love.audio.newSource("bgm/nihilism.wav", "stream")
-  bgm:setLooping(true)
-  bgm:play()
+  self.camera = Camera.new(game.canvasw / 2, game.canvash / 2)
 
-  camera:setCoords({x = (boredisle.width * tileset.tilew) / 2, y = (boredisle.height * tileset.tileh) / 2})
-
-  for i = 1, 4 do
-    players[i] = BoardPlayer.new(i, graph.playerOrigins[i])
+  for i = 1, self.numPlayers do
+    self.players[i] = BoardPlayer.new(i, self.graph.playerOrigins[i])
   end
 end
 
-function boardgame.setstate(state)
-  boardgame.state = state
-  boardgame.statet = 0
+function BoardGame:setstate(state)
+  self.state = state
+  self.statet = 0
 end
 
-function boardgame.setuproll()
-  boardgame.cursorpos = 0
-  boardgame.greenpos = math.round(love.math.random(1, 142 - 8))
-  boardgame.redpos = boardgame.greenpos
-  while math.abs(boardgame.redpos - boardgame.greenpos) < 8 do
-    boardgame.redpos = math.round(love.math.random(1, 142 - 8))
+function BoardGame:setuproll()
+  self.cursorpos = 0
+  self.greenpos = math.round(love.math.random(1, 100 - goodhitLen))
+  self.redpos = self.greenpos
+  while (self.redpos >= self.greenpos and self.redpos - self.greenpos < goodhitLen) or (self.greenpos >= self.redpos and self.greenpos - self.redpos < badhitLen) do
+    self.redpos = math.round(love.math.random(1, 100 - badhitLen))
   end
 end
 
-function boardgame.panToPlayer()
-  local coords = players[boardgame.player]:getMapCoords(tileset)
-  coords.x = coords.x + tileset.tilew / 2
-  coords.y = coords.y + tileset.tileh / 2 - 40
-  camera:panToCoords(coords)
+function BoardGame:panToPlayer()
+  local coords = self.players[self.curPlayer]:getMapCoords(self.assets.tileset)
+  coords.x = coords.x + self.assets.tileset.tilew / 2
+  coords.y = coords.y + self.assets.tileset.tileh / 2 - 40
+  self.camera:panToCoords(coords)
 end
 
-function boardgame.update(dt)
-  local oldState = boardgame.state
+function BoardGame:update(dt)
+  local oldState = self.state
 
-  if boardgame.state == "fadein" then
-    if boardgame.statet == 0 then
-      camera:panToCoords({x = 80, y = 76}, 3)
+  if self.state == "fadein" then
+    if self.statet == 0 then
+      self:panToPlayer()
     end
-    if boardgame.statet >= 3 then
-      boardgame.setstate("nextplayer")
+    if self.statet >= 3 then
+      self:setstate("nextplayer")
     end
-  elseif boardgame.state == "nextplayer" then
-    if boardgame.statet == 0 then
-      boardgame.panToPlayer()
+  elseif self.state == "nextplayer" then
+    if self.statet == 0 then
+      self:panToPlayer()
     end
-    if boardgame.statet >= 1 then
-      boardgame.setstate("waitplayer")
+    if self.statet >= 1 then
+      self:setstate("waitplayer")
     end
-  elseif boardgame.state == "waitplayer" then
-    if game.input.p[boardgame.player].a == -1 or game.input.p[boardgame.player].b == -1 then
-      boardgame.setstate("waitfade")
+  elseif self.state == "waitplayer" then
+    if game.input.p[self.curPlayer].a == -1 or game.input.p[self.curPlayer].b == -1 then
+      self:setstate("waitfade")
     end
-  elseif boardgame.state == "waitfade" then
-    if boardgame.statet >= 1 then
-      boardgame.setstate("rollenter")
-      boardgame.setuproll()
+  elseif self.state == "waitfade" then
+    if self.statet >= 1 then
+      self:setstate("rollenter")
+      self:setuproll()
     end
-  elseif boardgame.state == "rollenter" then
-    if boardgame.statet >= 1 then
-      boardgame.setstate("roll")
+  elseif self.state == "rollenter" then
+    self.cursorpos = self.statet * 100
+    if self.statet >= 1 then
+      self:setstate("roll")
     end
-    boardgame.cursorpos = boardgame.statet * 142
-  elseif boardgame.state == "roll" then
-    if game.input.p[boardgame.player].a == 1 then
-      if boardgame.cursorpos > boardgame.greenpos and boardgame.cursorpos < boardgame.greenpos + 8 then
-        goodhit:play()
-        boardgame.hittype = "good"
-        boardgame.hitval = love.math.random(7, 10)
-      elseif boardgame.cursorpos > boardgame.redpos and boardgame.cursorpos < boardgame.redpos + 8 then
-        badhit:play()
-        boardgame.hittype = "bad"
-        boardgame.hitval = love.math.random(1, 3)
+  elseif self.state == "roll" then
+    if game.input.p[self.curPlayer].a == 1 then
+      if self.cursorpos > self.greenpos and self.cursorpos < self.greenpos + goodhitLen then
+        self.assets.goodhit:play()
+        self.hittype = "good"
+        self.hitval = love.math.random(7, 15)
+      elseif self.cursorpos > self.redpos and self.cursorpos < self.redpos + badhitLen then
+        self.assets.badhit:play()
+        self.hittype = "bad"
+        self.hitval = love.math.random(1, 3)
       else
-        normalhit:play()
-        boardgame.hittype = "normal"
-        boardgame.hitval = love.math.random(3, 7)
+        self.assets.normalhit:play()
+        self.hittype = "normal"
+        self.hitval = love.math.random(3, 7)
       end
-      boardgame.setstate("rollhit")
+      self:setstate("rollhit")
     else
-      boardgame.cursorpos = 71 * math.cos(boardgame.statet * 5) + 71
+      self.cursorpos = 50 * math.cos(self.statet * 5) + 50
     end
-  elseif boardgame.state == "rollhit" then
-    if boardgame.statet >= 2 then
-      boardgame.setstate("move")
+  elseif self.state == "rollhit" then
+    if self.statet >= 2 then
+      self:setstate("move")
     end
-  elseif boardgame.state == "move" then
-    if boardgame.hitval > 0 then
-      local player = players[boardgame.player]
-      local status = player:getStatus(graph)
+  elseif self.state == "move" then
+    local player = self.players[self.curPlayer]
+    local status = player:getStatus(self.graph)
+    if self.hitval > 0 or status == "busy" then
       if status == "hop" then
-        player:hopNearby(graph)
-        boardgame.hitval = boardgame.hitval - 1
+        self.assets.jump:play()
+        player:hopNearby(self.graph)
+        self.hitval = self.hitval - 1
       elseif status == "move" then
-        player:move(graph, 1)
-        boardgame.hitval = boardgame.hitval - 1
+        self.assets.walk:play()
+        player:move(self.graph, 1)
+        self.hitval = self.hitval - 1
       elseif status == "pick" then
-        -- temporary
-        player:move(graph, 1)
-        boardgame.hitval = boardgame.hitval - 1
+        self.assets.walk:stop()
+        self.pickchoices = player:getPickChoices(self.graph)
+        self:setstate("pickmove")
       elseif status == "busy" then
         player:update(dt)
       end
-      local coords = player:getMapCoords(tileset)
-      coords.x = coords.x + tileset.tilew / 2
-      coords.y = coords.y + tileset.tileh / 2 - 40
-      camera:setCoords(coords)
+      local coords = player:getMapCoords(self.assets.tileset)
+      coords.x = coords.x + self.assets.tileset.tilew / 2
+      coords.y = coords.y + self.assets.tileset.tileh / 2 - 40
+      self.camera:setCoords(coords)
     else
-      boardgame.setstate("moveend")
+      self.assets.walk:stop()
+      self:setstate("moveend")
     end
-  elseif boardgame.state == "moveend" then
-    if boardgame.statet >= 1 then
-      if boardgame.player < 4 then
-        boardgame.player = boardgame.player + 1
-        boardgame.setstate("nextplayer")
+  elseif self.state == "pickmove" then
+    local player = self.players[self.curPlayer]
+    if game.input.p[self.curPlayer].r == 1 and self.pickchoices.right then
+      player:moveWithChoice(self.graph, "right")
+      self.assets.walk:play()
+      self:setstate("move")
+      self.hitval = self.hitval - 1
+    elseif game.input.p[self.curPlayer].d == 1 and self.pickchoices.down then
+      player:moveWithChoice(self.graph, "down")
+      self.assets.walk:play()
+      self:setstate("move")
+      self.hitval = self.hitval - 1
+    elseif game.input.p[self.curPlayer].l == 1 and self.pickchoices.left then
+      player:moveWithChoice(self.graph, "left")
+      self.assets.walk:play()
+      self:setstate("move")
+      self.hitval = self.hitval - 1
+    elseif game.input.p[self.curPlayer].u == 1 and self.pickchoices.up then
+      player:moveWithChoice(self.graph, "up")
+      self.assets.walk:play()
+      self:setstate("move")
+      self.hitval = self.hitval - 1
+    end
+  elseif self.state == "moveend" then
+    if self.statet >= 1 then
+      if self.curPlayer < self.numPlayers then
+        self.curPlayer = self.curPlayer + 1
+        self:setstate("nextplayer")
       else
-        boardgame.setstate("selectgame")
+        self:setstate("selectgame")
       end
     end
-  elseif boardgame.state == "selectgame" then
-    if boardgame.statet >= 1 then
-      boardgame.player = 1
-      boardgame.setstate("nextplayer")
+  elseif self.state == "selectgame" then
+    if self.statet >= 1 then
+      self.curPlayer = 1
+      self:setstate("nextplayer")
     end
   end
 
-  camera:update(dt)
-  boardgame.t = boardgame.t + dt
+  self.camera:update(dt)
+  self.t = self.t + dt
 
   -- do not increment statet for new states.
-  if boardgame.state == oldState then
-    boardgame.statet = boardgame.statet + dt
+  if self.state == oldState then
+    self.statet = self.statet + dt
   end
 end
 
-function boardgame.drawstart(a)
-  local str = string.format("Player %d GO!", boardgame.player)
-  local yoff = math.round(math.sin(boardgame.t) * 10)
+function BoardGame:drawstart(a)
+  local str = string.format("Player %d GO!", self.curPlayer)
+  local yoff = math.round(math.sin(self.t) * 10)
   a = math.round(a * 8) / 8
   love.graphics.setColor(0, 0, 0, a / 2)
-  love.graphics.rectangle("fill", 0, 39 + yoff, 160, 45 - math.cos(boardgame.t) * 5)
-  yoff = math.round(math.sin(boardgame.t + 0.5) * 10)
+  love.graphics.rectangle("fill", 0, 39 + yoff, game.canvasw, 45 - math.cos(self.t) * 5)
+  yoff = math.round(math.sin(self.t + 0.5) * 10)
   love.graphics.setColor(1, 1, 1, a)
-  love.graphics.rectangle("fill", 0, 45 + yoff, 160, 30)
-  yoff = math.round(math.sin(boardgame.t + 1) * 10)
+  love.graphics.rectangle("fill", 0, 45 + yoff, game.canvasw, 30)
+  yoff = math.round(math.sin(self.t + 1) * 10)
   love.graphics.print(str, 10, 50 + yoff)
 end
 
-function boardgame.drawroll(a, hit)
-  local str = string.format("Player %d", boardgame.player)
+function BoardGame:drawroll(a, hit)
+  local str = string.format("Player %d", self.curPlayer)
   yoff = math.round((-math.sin(math.pi * a)) * 20) * 2
   a = math.round(a * 8) / 8
+
+  local border = 2
+  local margin = 6
+
+  local outsidex = margin
+  local outsidey = 100 + margin
+  local outsidew = game.canvasw - outsidex - margin
+  local outsideh = 36
+
+  local insidex = margin + border
+  local insidey = 100 + margin + border
+  local insidew = game.canvasw - insidex - margin - border
+  local insideh = 30
+
+  local barscale = insidew / 100
+
   love.graphics.setColor(1, 1, 1, a)
   love.graphics.print(str, 10, 10 - yoff)
   love.graphics.setColor(0, 0, 0, a)
-  love.graphics.rectangle("fill", 6, 50 - yoff, 146, 18)
-  love.graphics.setColor(1, 1, 1, a)
-  love.graphics.rectangle("fill", 8, 52 - yoff, 142, 14)
+  love.graphics.rectangle("fill", insidex, outsidey - yoff, insidew, border) --top
+  love.graphics.rectangle("fill", outsidex, outsidey - yoff, border, outsideh) --left
+  love.graphics.rectangle("fill", insidex, outsidey + outsideh - border * 2 - yoff, insidew, border * 2) --bottom
+  love.graphics.rectangle("fill", outsidex + outsidew - border, outsidey - yoff, border, outsideh) --right
+  love.graphics.setColor(1, 1, 1, a / 2)
+  love.graphics.rectangle("fill", insidex, insidey - yoff, insidew, insideh)
   love.graphics.setColor(0, 1, 0, a)
-  love.graphics.rectangle("fill", 8 + boardgame.greenpos, 52 - yoff * 2, 8, 14)
+  love.graphics.rectangle("fill", insidex + self.greenpos * barscale, insidey - yoff, goodhitLen * barscale, insideh)
   love.graphics.setColor(1, 0, 0, a)
-  love.graphics.rectangle("fill", 8 + boardgame.redpos, 52 + yoff, 8, 14)
+  love.graphics.rectangle("fill", insidex + self.redpos * barscale, insidey - yoff, badhitLen * barscale, insideh)
 
   -- it's kinda cool if the cursor stays in place during the hit anim
   if hit then
@@ -201,66 +260,66 @@ function boardgame.drawroll(a, hit)
   end
 
   love.graphics.setColor(0, 0, 0, a)
-  love.graphics.rectangle("fill", 8 + boardgame.cursorpos, 50 - yoff, 1, 18)
+  love.graphics.rectangle("fill", insidex + self.cursorpos * barscale, outsidey - yoff, 1, outsideh)
   love.graphics.setColor(1, 1, 1, a)
-  love.graphics.draw(cursorimg, 4 + boardgame.cursorpos, 68 - yoff)
+  love.graphics.draw(self.assets.cursorimg, insidex + self.cursorpos * barscale - 4, outsidey + outsideh - yoff)
 end
 
-function boardgame.drawhit(a)
-  local str = string.format("%d", boardgame.hitval)
+function BoardGame:drawhit(a)
+  local str = string.format("%d", self.hitval)
   love.graphics.setColor(1, 1, 1, a)
-  love.graphics.printf(str, 0, 50, 160, "center")
+  love.graphics.printf(str, 0, game.canvash / 2 - 40, game.canvasw, "center")
 end
 
-function boardgame.draw()
+function BoardGame:draw()
   local screenshake = 0
   love.graphics.setCanvas(game.canvas)
   love.graphics.setColor(1, 1, 1, 1)
   love.graphics.clear(0.5, 0.5, 0.5, 1)
   love.graphics.setBlendMode("alpha")
 
-  local mx = camera:getMapX()
-  local my = camera:getMapY()
+  local mx = self.camera:getMapX()
+  local my = self.camera:getMapY()
 
-  map.drawmap(boredisle, tileset, mx, my)
-  for i = 1, 4 do
-    players[i]:draw(tileset, mx, my)
+  self.assets.tileset:drawMap(self.assets.map, mx, my)
+  for i = 1, self.numPlayers do
+    self.players[i]:draw(self.assets.tileset, mx, my)
   end
 
-  if boardgame.state == "fadein" then
-    local a = math.round((1 - boardgame.statet) * 8) / 8
+  if self.state == "fadein" then
+    local a = math.round((1 - self.statet) * 8) / 8
     love.graphics.setColor(0, 0, 0, a)
-    love.graphics.rectangle("fill", 0, 0, 160, 144)
-  elseif boardgame.state == "nextplayer" then
-    boardgame.drawstart(boardgame.statet)
-  elseif boardgame.state == "waitplayer" then
-    boardgame.drawstart(1)
-  elseif boardgame.state == "waitfade" then
-    boardgame.drawstart(1 - boardgame.statet)
-  elseif boardgame.state == "rollenter" then
-    boardgame.drawroll(boardgame.statet, false)
-  elseif boardgame.state == "roll" then
-    boardgame.drawroll(1, false)
-  elseif boardgame.state == "rollhit" then
-    boardgame.drawroll(1 - boardgame.statet, true)
-    boardgame.drawhit(1)
-    local a = math.round((1 - boardgame.statet) * 8) / 8
-    if boardgame.hittype == "good" then
+    love.graphics.rectangle("fill", 0, 0, game.canvasw, game.canvash)
+  elseif self.state == "nextplayer" then
+    self:drawstart(self.statet)
+  elseif self.state == "waitplayer" then
+    self:drawstart(1)
+  elseif self.state == "waitfade" then
+    self:drawstart(1 - self.statet)
+  elseif self.state == "rollenter" then
+    self:drawroll(self.statet, false)
+  elseif self.state == "roll" then
+    self:drawroll(1, false)
+  elseif self.state == "rollhit" then
+    self:drawroll(1 - self.statet, true)
+    self:drawhit(1)
+    local a = math.round((1 - self.statet) * 8) / 8
+    if self.hittype == "good" then
       love.graphics.setColor(0.5, 1, 0.5, a)
-      screenshake = (1 - boardgame.statet) * 15
-    elseif boardgame.hittype == "bad" then
+      screenshake = (1 - self.statet) * 15
+    elseif self.hittype == "bad" then
       love.graphics.setColor(1, 0.5, 0.5, a)
-      screenshake = (1 - boardgame.statet) * 5
+      screenshake = (1 - self.statet) * 5
     else
       love.graphics.setColor(1, 1, 1, a)
-      screenshake = (1 - boardgame.statet) * 10
+      screenshake = (1 - self.statet) * 10
     end
-    love.graphics.rectangle("fill", 0, 0, 160, 144)
-  elseif boardgame.state == "move" then
-    boardgame.drawhit(1)
-  elseif boardgame.state == "selectgame" then
+    love.graphics.rectangle("fill", 0, 0, game.canvasw, game.canvash)
+  elseif self.state == "move" then
+    self:drawhit(1)
+  elseif self.state == "selectgame" then
   end
-  local t = boardgame.t
+  local t = self.t
 
   love.graphics.setCanvas()
   love.graphics.setColor(1, 1, 1, 1)
@@ -270,7 +329,7 @@ function boardgame.draw()
     x = math.random() * screenshake - screenshake / 2
     y = math.random() * screenshake - screenshake / 2
   end
-  love.graphics.draw(game.canvas, x, y, 0, 2)
+  love.graphics.draw(game.canvas, x, y, 0, game.canvasscale)
 end
 
-return boardgame
+return BoardGame

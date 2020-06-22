@@ -2,8 +2,8 @@ local Camera = {}
 Camera.__index = Camera
 
 function Camera.new()
-  local x = 80
-  local y = 72
+  local x = game.canvasw / 2
+  local y = game.canvash / 2
   local camera = {x0=x, y0=y, x1=x, y1=y, t=0, duration=0}
   setmetatable(camera, Camera)
   return camera
@@ -39,7 +39,7 @@ function Camera:getX()
 end
 
 function Camera:getMapX()
-  return 80 - self:getX()
+  return game.canvasw / 2 - self:getX()
 end
 
 function Camera:getY()
@@ -51,7 +51,7 @@ function Camera:getY()
 end
 
 function Camera:getMapY()
-  return 72 - self:getY()
+  return game.canvash / 2 - self:getY()
 end
 
 function Camera:panToCoords(coords, duration)

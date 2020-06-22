@@ -32,12 +32,10 @@ end
 function BoardPlayer:getPickChoices(graph)
   local node = graph:getNodeAt(self)
   local choices = {}
-
-  if not (node.right == nil) then table.insert(choices, "right") end
-  if not (node.down == nil) then table.insert(choices, "down") end
-  if not (node.left == nil) then table.insert(choices, "left") end
-  if not (node.up == nil) then table.insert(choices, "up") end
-
+  if not (node.right == nil) and not (self.direction == "left")  then choices.right = true end
+  if not (node.down == nil) and not (self.direction == "up") then choices.down = true end
+  if not (node.left == nil) and not (self.direction == "right") then choices.left = true end
+  if not (node.up == nil) and not (self.direction == "down") then choices.up = true end
   return choices
 end
 
@@ -67,6 +65,7 @@ function BoardPlayer:moveWithChoice(graph, choice, duration)
   end
 
   self.t = 0
+  self.direction = choice
   self.duration = duration or 1
   self.state = "moving"
 end
@@ -86,7 +85,12 @@ function BoardPlayer:move(graph, duration)
   elseif not (self.direction == "left") and not (node.right == nil) then moveTo = node.right; self.direction = "right"
   elseif not (self.direction == "up") and not (node.down == nil) then moveTo = node.down; self.direction = "down"
   elseif not (self.direction == "right") and not (node.left == nil) then moveTo = node.left; self.direction = "left"
-  elseif not (self.direction == "down") and not (node.up == nil) then moveTo = node.up; self.direction = "up" end
+  elseif not (self.direction == "down") and not (node.up == nil) then moveTo = node.up; self.direction = "up"
+  -- Dead ends (turn around)
+  elseif not (node.right == nil) then moveTo = node.right; self.direction = "right"
+  elseif not (node.down == nil) then moveTo = node.down; self.direction = "down"
+  elseif not (node.left == nil) then moveTo = node.left; self.direction = "left"
+  elseif not (node.up == nil) then moveTo = node.up; self.direction = "up" end
 
   assert(not (moveTo == nil), "invalid move")
 
@@ -143,7 +147,7 @@ function BoardPlayer:draw(tileset, dx, dy)
     tile = tile + 1
   end
 
-  map.drawtile(tileset, coords.x + dx, coords.y + dy - 16, tile)
+  tileset:drawTile(coords.x + dx, coords.y + dy - 16, tile)
 end
 
 return BoardPlayer
