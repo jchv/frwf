@@ -9,7 +9,7 @@ function HostGameMenu.new()
 end
 
 function HostGameMenu:load()
-  game.host("localhost:10305")
+  game.host("0.0.0.0:10305")
 end
 
 function HostGameMenu:unload()
