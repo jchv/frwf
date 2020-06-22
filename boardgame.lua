@@ -71,6 +71,7 @@ end
 function BoardGame:unload()
   if not (self.assets == nil) then
     self.assets.bgm:stop()
+    self.assets.walk:stop()
   end
 end
 
