@@ -55,10 +55,15 @@ function ShootGame:load()
   self.curPlayer = 1
   self.numPlayers = game.numPlayers
   self.players = {}
-  for i = 1, self.numPlayers do
+  for i, player in pairs(game.shootPlayers) do
     self.players[i] = ShootPlayer.new(i, playerOrigins[i], self, i == game.selfPlayer)
+
+    -- Set camera to first player or if we're in the match, ourselves.
+    if not self.camera or i == game.selfPlayer then
+      self.camPlayer = i
+      self.camera = Camera.new(self.players[i].x, self.players[i].y)
+    end
   end
-  self.camera = Camera.new(self.players[game.selfPlayer].x, self.players[game.selfPlayer].y)
 
   local itemOrigins = self.assets.tileset:getItemOrigins(self.assets.map)
   self.items = {}
@@ -75,8 +80,6 @@ function ShootGame:load()
 
   self.state = "fadein"
   self.statet = 0
-
-  self.camPlayer = game.selfPlayer
 end
 
 function ShootGame:unload()
@@ -176,6 +179,13 @@ function ShootGame:update(dt)
       game.host:broadcast(json.encode({ message = "frameInput", player = game.selfPlayer, frameInput = myFrameInput }))
       frameInput[game.selfPlayer] = myFrameInput
 
+      if self.nextFrameInput then
+        for i, input in pairs(self.nextFrameInput) do
+          frameInput[i] = input
+        end
+        self.nextFrameInput = nil
+      end
+
       -- Receive other player's frame input.
       local haveInputFrom = 1
       while haveInputFrom < game.numPlayers do
@@ -184,12 +194,19 @@ function ShootGame:update(dt)
           if event.type == "receive" then
             data = json.decode(event.data)
             if data.message == "frameInput" then
-              assert(frameInput[data.player] == nil, "unexpectedly got input twice from one player")
-              frameInput[data.player] = data.frameInput
-              haveInputFrom = haveInputFrom + 1
+              if frameInput[data.player] then
+                -- We may need to buffer up to 1 frame due to frame skew.
+                if self.nextFrameInput == nil then
+                  self.nextFrameInput = {}
+                end
+                self.nextFrameInput[data.player] = data.frameInput
+              else
+                frameInput[data.player] = data.frameInput
+                haveInputFrom = haveInputFrom + 1
+              end
             end
           elseif event.type == "disconnect" then
-            game.scene.next(game.menu)
+            game.scene:next(game.menu)
           end
           event = game.host:service()
         end

@@ -16,8 +16,8 @@ function ShootPlayer.new(player, coords, game, human)
     game = game,
     human = human,
     fg = game.fg,
-    health = 10,
-    maxHealth = 10,
+    health = 5,
+    maxHealth = 5,
   }
 
   assert(not (player.fg == nil), "map is missing fg layer")

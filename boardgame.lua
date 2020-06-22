@@ -60,7 +60,10 @@ function BoardGame:load()
     end
   end
 
-  self.curPlayer = 1
+  if self.curPlayer == nil then
+    self.curPlayer = 1
+  end
+
   self.state = "fadein"
   self.statet = 0
 end
@@ -121,14 +124,17 @@ function BoardGame:update(dt)
           game.scores[data.player] = game.scores[data.player] + data.hitval * 60
         elseif data.message == "fadeout" then
           self:setstate("fadeout")
+        elseif data.message == "duel" then
+          game.shootPlayers = data.duelPlayers
+          self:setstate("duel")
         end
       elseif event.type == "disconnect" then
-        game.scene.next(game.menu)
+        game.scene:next(game.menu)
       end
       event = game.host:service()
     end
 
-    if not (self.state == "netwait") and not (self.state == "fadeout") then
+    if not (self.state == "netwait") and not (self.state == "fadeout") and not (self.state == "duel") and not (self.state == "duelfadeout") then
       if not (self.curPlayer == game.selfPlayer) then
         self:setstate("netwait")
       end
@@ -142,7 +148,12 @@ function BoardGame:update(dt)
       self:panToPlayer(1)
     end
     if self.statet >= 1 then
-      self:setstate("nextplayer")
+      if self.returnstate then
+        self:setstate(self.returnstate)
+        self.returnstate = nil
+      else
+        self:setstate("nextplayer")
+      end
     end
   elseif self.state == "nextplayer" then
     if self.statet == 0 then
@@ -266,6 +277,26 @@ function BoardGame:update(dt)
           game.host:broadcast(json.encode({message = "playerMove", player = self.curPlayer}))
         end
         self.hitval = self.hitval - 1
+
+        if not (player.x1 == player.x and player.y1 == player.y) then
+          local duelPlayers = nil
+          for i, other in pairs(self.players) do
+            if player.x1 == other.x and player.y1 == other.y then
+              if duelPlayers == nil then
+                duelPlayers = {}
+                duelPlayers[self.curPlayer] = {}
+              end
+              duelPlayers[i] = {}
+            end
+          end
+          if duelPlayers then
+            if game.locality == "remote" then
+              game.host:broadcast(json.encode({message = "duel", duelPlayers = duelPlayers}))
+            end
+            game.shootPlayers = duelPlayers
+            self:setstate("duel")
+          end
+        end
       elseif status == "pick" then
         self.assets.walk:stop()
         self.pickchoices = player:getPickChoices(self.graph)
@@ -348,8 +379,36 @@ function BoardGame:update(dt)
         end
       end
     end
+  elseif self.state == "duel" then
+    if self.statet >= 3 then
+      self:setstate("duelfadeout")
+    end
+    self.players[self.curPlayer]:update(dt)
+  elseif self.state == "duelfadeout" then
+    if self.statet >= 1 then
+      if self.locality == "remote" then
+        if self.curPlayer == game.selfPlayer then
+          self.returnstate = "move"
+        else
+          self.returnstate = "netwait"
+        end
+      else
+        self.returnstate = "move"
+      end
+      game.scene:next(game.shoot)
+    end
+    self.assets.bgm:setVolume(1 - self.statet)
   elseif self.state == "fadeout" then
     if self.statet >= 1 then
+      -- Switch board game back to player 1.
+      self.curPlayer = 1
+      self.returnstate = "waitplayer"
+
+      -- Switch to shoot game with all players.
+      game.shootPlayers = {}
+      for i = 1, game.numPlayers do
+        game.shootPlayers[i] = {}
+      end
       game.scene:next(game.shoot)
     end
     self.assets.bgm:setVolume(1 - self.statet)
@@ -497,6 +556,19 @@ function BoardGame:draw()
     if self.pickchoices.left then self.assets.tileset:drawTile(coords.x + mx - 32, coords.y + my - 16, 55) end
     if self.pickchoices.up then self.assets.tileset:drawTile(coords.x + mx, coords.y + my - 48, 56) end
     self:drawScore(0)
+  elseif self.state == "duel" then
+    if self.statet < 1 then
+      local a = math.round((1 - self.statet) * 8) / 8
+      love.graphics.setColor(1, 1, 1, a)
+      love.graphics.rectangle("fill", 0, 0, game.canvasw, game.canvash)
+    end
+    local str = string.format("DUEL!", self.hitval)
+    love.graphics.setColor(math.sin(self.statet / 5) * 0.5 + 0.5, math.cos(self.statet / 4) * 0.5 + 0.5, math.sin(self.statet / 3) * 0.5 + 0.5, a)
+    love.graphics.printf(str, 0, game.canvash / 2, game.canvasw, "center")
+  elseif self.state == "duelfadeout" then
+    local a = math.round(self.statet * 8) / 8
+    love.graphics.setColor(0, 0, 0, a)
+    love.graphics.rectangle("fill", 0, 0, game.canvasw, game.canvash)
   elseif self.state == "fadeout" then
     local a = math.round(self.statet * 8) / 8
     love.graphics.setColor(0, 0, 0, a)
