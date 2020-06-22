@@ -14,9 +14,6 @@ function BoardGame.new()
     t = 0,
     state = "fadein",
     statet = 0,
-    curPlayer = 1,
-    numPlayers = 2,
-    players = {},
   }
 
   setmetatable(boardgame, BoardGame)
@@ -41,7 +38,7 @@ function BoardGame:load()
     self.assets.walk:setLooping(true)
     
     -- bgm
-    self.assets.bgm = love.audio.newSource("bgm/nihilism.wav", "stream")
+    self.assets.bgm = love.audio.newSource("bgm/nihilists.wav", "stream")
     self.assets.bgm:setLooping(true)
     self.assets.bgm:play()
     
@@ -52,8 +49,18 @@ function BoardGame:load()
 
   self.camera = Camera.new(game.canvasw / 2, game.canvash / 2)
 
+  local playerOrigins = self.assets.tileset:getPlayerOrigins(self.assets.map)
+  self.curPlayer = 1
+  self.numPlayers = game.numPlayers
+  self.players = {}
   for i = 1, self.numPlayers do
-    self.players[i] = BoardPlayer.new(i, self.graph.playerOrigins[i])
+    self.players[i] = BoardPlayer.new(i, playerOrigins[i])
+  end
+end
+
+function BoardGame:unload()
+  if not (self.assets == nil) then
+    self.assets.bgm:stop()
   end
 end
 
@@ -188,13 +195,12 @@ function BoardGame:update(dt)
         self.curPlayer = self.curPlayer + 1
         self:setstate("nextplayer")
       else
-        self:setstate("selectgame")
+        self:setstate("fadeout")
       end
     end
-  elseif self.state == "selectgame" then
+  elseif self.state == "fadeout" then
     if self.statet >= 1 then
-      self.curPlayer = 1
-      self:setstate("nextplayer")
+      game.scene:next(game.shoot)
     end
   end
 
@@ -317,7 +323,10 @@ function BoardGame:draw()
     love.graphics.rectangle("fill", 0, 0, game.canvasw, game.canvash)
   elseif self.state == "move" then
     self:drawhit(1)
-  elseif self.state == "selectgame" then
+  elseif self.state == "fadeout" then
+    local a = math.round(self.statet * 8) / 8
+    love.graphics.setColor(0, 0, 0, a)
+    love.graphics.rectangle("fill", 0, 0, game.canvasw, game.canvash)
   end
   local t = self.t
 

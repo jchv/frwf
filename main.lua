@@ -1,6 +1,7 @@
-StateManager = require("stateman")
+SceneManager = require("sceneman")
 InputManager = require("inputman")
 BoardGame = require("boardgame")
+ShootGame = require("shootgame")
 
 -- game global
 game = {
@@ -10,10 +11,12 @@ game = {
   canvasw = 320,
   canvash = 288,
   canvasscale = 2,
-  state = StateManager.new(),
+  numPlayers = 2,
+  scene = SceneManager.new(),
   input = InputManager.new(),
+  board = BoardGame.new(),
+  shoot = ShootGame.new(),
 }
-game.board = BoardGame.new()
 
 splash = require("splash")
 
@@ -35,8 +38,8 @@ function love.load()
   game.canvas = love.graphics.newCanvas(game.canvasw, game.canvash)
 
   -- Set initial state.
-  --game.state:next(splash)
-  game.state:next(game.board)
+  --game.scene:next(splash)
+  game.scene:next(game.board)
 end
 
 function love.keypressed(key, scancode, isrepeat)
@@ -48,12 +51,12 @@ function love.keyreleased(key, scancode)
 end
 
 function love.update(dt)
-  game.state:update(dt)
+  game.scene:update(dt)
   game.input:update(dt)
 end
 
 function love.draw()
   love.graphics.clear(1, 1, 1)
   love.graphics.setColor(1, 1, 1, 1)
-  game.state:draw()
+  game.scene:draw()
 end

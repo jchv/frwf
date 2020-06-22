@@ -58,4 +58,26 @@ function TileSet:tilePos(tileCoords)
   }
 end
 
+local playerTiles = {17, 19, 25, 27}
+
+function TileSet:getPlayerOrigins(tilemap)
+  local playerOrigins = {}
+
+  for i, layer in pairs(tilemap.layers) do
+    for y = 1, layer.height do
+      for x = 1, layer.width do
+        local tileindex = (y - 1) * layer.width + x
+        local data = layer.data[tileindex]
+        for player, tile in pairs(playerTiles) do
+          if data == tile then
+            playerOrigins[player] = {x = x, y = y}
+          end
+        end
+      end
+    end
+  end
+
+  return playerOrigins
+end
+
 return TileSet

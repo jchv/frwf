@@ -17,7 +17,7 @@ function splash.update(dt)
     intro:play()
     introplayed = true
   elseif splash.t >= 8 then
-    game.state:next(boardgame)
+    game.scene:next(boardgame)
   end
 end
 

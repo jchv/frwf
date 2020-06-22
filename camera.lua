@@ -1,9 +1,9 @@
 local Camera = {}
 Camera.__index = Camera
 
-function Camera.new()
-  local x = game.canvasw / 2
-  local y = game.canvash / 2
+function Camera.new(x, y)
+  x = x or game.canvasw / 2
+  y = y or game.canvash / 2
   local camera = {x0=x, y0=y, x1=x, y1=y, t=0, duration=0}
   setmetatable(camera, Camera)
   return camera

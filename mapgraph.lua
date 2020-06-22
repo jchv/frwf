@@ -74,8 +74,6 @@ function tileToEdge(tile)
   return col + row * 4
 end
 
-local playerTiles = {17, 19, 25, 27}
-
 function MapGraph.new(tilemap)
   mapgraph = {}
   setmetatable(mapgraph, MapGraph)
@@ -92,7 +90,6 @@ function MapGraph:init(tilemap)
   end
 
   self.orphans = {}
-  self.playerOrigins = {}
 
   for i, layer in pairs(tilemap.layers) do
     -- Initialize nodes.
@@ -103,11 +100,6 @@ function MapGraph:init(tilemap)
         local edge = tileToEdge(data)
         if not (edge == nil) then
           self.nodemap[y][x] = MapNode.new(x, y, edge)
-        end
-        for player, tile in pairs(playerTiles) do
-          if data == tile then
-            self.playerOrigins[player] = {x = x, y = y}
-          end
         end
       end
     end

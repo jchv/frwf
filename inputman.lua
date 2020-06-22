@@ -30,12 +30,10 @@ function InputManager:setButtonState(i, button, down)
   if down and self.p[i][button] > 0 then return end
   if not down and self.p[i][button] <= 0 then return end
 
-  for i = 1, 4 do
-    if down == true then
-      self.p[i][button] = 1
-    else
-      self.p[i][button] = -1
-    end
+  if down == true then
+    self.p[i][button] = 1
+  else
+    self.p[i][button] = -1
   end
 end
 
