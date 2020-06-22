@@ -175,7 +175,10 @@ function ShootGame:update(dt)
   if game.locality == "remote" then
     if self.state == "play" then
       -- Send our own frame input.
-      local myFrameInput = self.players[game.selfPlayer]:getFrameInput()
+      local myFrameInput
+      if self.players[game.selfPlayer] then
+         myFrameInput = self.players[game.selfPlayer]:getFrameInput()
+      end
       game.host:broadcast(json.encode({ message = "frameInput", player = game.selfPlayer, frameInput = myFrameInput }))
       frameInput[game.selfPlayer] = myFrameInput
 
@@ -193,6 +196,13 @@ function ShootGame:update(dt)
         local event = game.host:service(1)
         while event do
           if event.type == "receive" then
+            if game.selfPlayer == 1 then
+              for i, peer in pairs(game.peerPlayers) do
+                if not (peer == event.peer) then
+                  peer:send(event.data)
+                end
+              end
+            end
             data = json.decode(event.data)
             if data.message == "frameInput" then
               if frameInput[data.player] then

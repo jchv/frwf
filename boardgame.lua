@@ -101,6 +101,13 @@ function BoardGame:update(dt)
     local event = game.host:service(1)
     while event do
       if event.type == "receive" then
+        if game.selfPlayer == 1 then
+          for i, peer in pairs(game.peerPlayers) do
+            if not (peer == event.peer) then
+              peer:send(event.data)
+            end
+          end
+        end
         data = json.decode(event.data)
         if data.message == "playerHopNearby" then
           self.players[data.player]:forceIdle()
