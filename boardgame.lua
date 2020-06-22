@@ -12,8 +12,6 @@ local goodhitLen = 6
 function BoardGame.new()
   local boardgame = {
     t = 0,
-    state = "fadein",
-    statet = 0,
   }
 
   setmetatable(boardgame, BoardGame)
@@ -40,22 +38,31 @@ function BoardGame:load()
     -- bgm
     self.assets.bgm = love.audio.newSource("bgm/nihilists.wav", "stream")
     self.assets.bgm:setLooping(true)
-    self.assets.bgm:play()
     
     -- data
     self.assets.map = require("data/boredisle.map")
     self.graph = MapGraph.new(self.assets.map)
   end
 
-  self.camera = Camera.new(game.canvasw / 2, game.canvash / 2)
+  self.assets.bgm:play()
+  self.assets.bgm:setVolume(1)
 
-  local playerOrigins = self.assets.tileset:getPlayerOrigins(self.assets.map)
-  self.curPlayer = 1
-  self.numPlayers = game.numPlayers
-  self.players = {}
-  for i = 1, self.numPlayers do
-    self.players[i] = BoardPlayer.new(i, playerOrigins[i])
+  if self.camera == nil then
+    self.camera = Camera.new(game.canvasw / 2, game.canvash / 2)
   end
+
+  if self.players == nil then
+    local playerOrigins = self.assets.tileset:getPlayerOrigins(self.assets.map)
+    self.numPlayers = game.numPlayers
+    self.players = {}
+    for i = 1, self.numPlayers do
+      self.players[i] = BoardPlayer.new(i, playerOrigins[i], i == game.selfPlayer)
+    end
+  end
+
+  self.curPlayer = 1
+  self.state = "fadein"
+  self.statet = 0
 end
 
 function BoardGame:unload()
@@ -78,21 +85,63 @@ function BoardGame:setuproll()
   end
 end
 
-function BoardGame:panToPlayer()
+function BoardGame:panToPlayer(duration)
   local coords = self.players[self.curPlayer]:getMapCoords(self.assets.tileset)
   coords.x = coords.x + self.assets.tileset.tilew / 2
   coords.y = coords.y + self.assets.tileset.tileh / 2 - 40
-  self.camera:panToCoords(coords)
+  self.camera:panToCoords(coords, duration or 3)
 end
 
 function BoardGame:update(dt)
+  if game.locality == "remote" then
+    local event = game.host:service(1)
+    while event do
+      if event.type == "receive" then
+        data = json.decode(event.data)
+        if data.message == "playerHopNearby" then
+          self.players[data.player]:forceIdle()
+          self.players[data.player]:hopNearby(self.graph)
+        elseif data.message == "playerMove" then
+          self.players[data.player]:forceIdle()
+          self.players[data.player]:move(self.graph)
+        elseif data.message == "playerMoveWithChoice" then
+          self.players[data.player]:forceIdle()
+          self.players[data.player]:moveWithChoice(self.graph, data.choice)
+        elseif data.message == "nextPlayer" then
+          self.players[self.curPlayer]:forceIdle()
+          self.curPlayer = data.player
+          if self.curPlayer == game.selfPlayer then
+            self:setstate("nextplayer")
+          end
+        elseif data.message == "playerGoodHit" then
+          game.scores[data.player] = game.scores[data.player] + data.hitval * 100
+        elseif data.message == "playerNormalHit" then
+          game.scores[data.player] = game.scores[data.player] + data.hitval * 80
+        elseif data.message == "playerBadHit" then
+          game.scores[data.player] = game.scores[data.player] + data.hitval * 60
+        elseif data.message == "fadeout" then
+          self:setstate("fadeout")
+        end
+      elseif event.type == "disconnect" then
+        game.scene.next(game.menu)
+      end
+      event = game.host:service()
+    end
+
+    if not (self.state == "netwait") and not (self.state == "fadeout") then
+      if not (self.curPlayer == game.selfPlayer) then
+        self:setstate("netwait")
+      end
+    end
+  end
+
   local oldState = self.state
 
   if self.state == "fadein" then
     if self.statet == 0 then
-      self:panToPlayer()
+      self:panToPlayer(1)
     end
-    if self.statet >= 3 then
+    if self.statet >= 1 then
       self:setstate("nextplayer")
     end
   elseif self.state == "nextplayer" then
@@ -103,9 +152,22 @@ function BoardGame:update(dt)
       self:setstate("waitplayer")
     end
   elseif self.state == "waitplayer" then
-    if game.input.p[self.curPlayer].a == -1 or game.input.p[self.curPlayer].b == -1 then
-      self:setstate("waitfade")
+    if self.players[self.curPlayer].human then
+      if game.input.p[1].a == -1 or game.input.p[1].b == -1 then
+        self:setstate("waitfade")
+      end
+    else
+      if self.statet >= 1 then
+        self:setstate("waitfade")
+      end
     end
+  elseif self.state == "netwait" then
+    local player = self.players[self.curPlayer]
+    local coords = player:getMapCoords(self.assets.tileset)
+    coords.x = coords.x + self.assets.tileset.tilew / 2
+    coords.y = coords.y + self.assets.tileset.tileh / 2 - 40
+    self.camera:setCoords(coords)
+    self.players[self.curPlayer]:update(dt)
   elseif self.state == "waitfade" then
     if self.statet >= 1 then
       self:setstate("rollenter")
@@ -117,23 +179,70 @@ function BoardGame:update(dt)
       self:setstate("roll")
     end
   elseif self.state == "roll" then
-    if game.input.p[self.curPlayer].a == 1 then
-      if self.cursorpos > self.greenpos and self.cursorpos < self.greenpos + goodhitLen then
-        self.assets.goodhit:play()
-        self.hittype = "good"
-        self.hitval = love.math.random(7, 15)
-      elseif self.cursorpos > self.redpos and self.cursorpos < self.redpos + badhitLen then
-        self.assets.badhit:play()
-        self.hittype = "bad"
-        self.hitval = love.math.random(1, 3)
+    if self.players[self.curPlayer].human then
+      -- human
+      if game.input.p[1].a == 1 then
+        if self.cursorpos > self.greenpos and self.cursorpos < self.greenpos + goodhitLen then
+          self.assets.goodhit:play()
+          self.hittype = "good"
+          self.hitval = love.math.random(7, 15)
+          game.scores[self.curPlayer] = game.scores[self.curPlayer] + self.hitval * 100
+          if game.locality == "remote" then
+            game.host:broadcast(json.encode({message = "playerGoodHit", player = self.curPlayer, hitval = self.hitval}))
+          end
+        elseif self.cursorpos > self.redpos and self.cursorpos < self.redpos + badhitLen then
+          self.assets.badhit:play()
+          self.hittype = "bad"
+          self.hitval = love.math.random(1, 3)
+          game.scores[self.curPlayer] = game.scores[self.curPlayer] + self.hitval * 60
+          if game.locality == "remote" then
+            game.host:broadcast(json.encode({message = "playerBadHit", player = self.curPlayer, hitval = self.hitval}))
+          end
+        else
+          self.assets.normalhit:play()
+          self.hittype = "normal"
+          self.hitval = love.math.random(3, 7)
+          game.scores[self.curPlayer] = game.scores[self.curPlayer] + self.hitval * 80
+          if game.locality == "remote" then
+            game.host:broadcast(json.encode({message = "playerNormalHit", player = self.curPlayer, hitval = self.hitval}))
+          end
+        end
+        self:setstate("rollhit")
       else
-        self.assets.normalhit:play()
-        self.hittype = "normal"
-        self.hitval = love.math.random(3, 7)
+        self.cursorpos = 50 * math.cos(self.statet * 5) + 50
       end
-      self:setstate("rollhit")
     else
-      self.cursorpos = 50 * math.cos(self.statet * 5) + 50
+      -- ai
+      if love.math.random(1, 50) == 1 then
+        if self.cursorpos > self.greenpos and self.cursorpos < self.greenpos + goodhitLen then
+          self.assets.goodhit:play()
+          self.hittype = "good"
+          self.hitval = love.math.random(7, 15)
+          game.scores[self.curPlayer] = game.scores[self.curPlayer] + self.hitval * 100
+          if game.locality == "remote" then
+            game.host:broadcast(json.encode({message = "playerGoodHit", player = self.curPlayer, hitval = self.hitval}))
+          end
+        elseif self.cursorpos > self.redpos and self.cursorpos < self.redpos + badhitLen then
+          self.assets.badhit:play()
+          self.hittype = "bad"
+          self.hitval = love.math.random(1, 3)
+          game.scores[self.curPlayer] = game.scores[self.curPlayer] + self.hitval * 60
+          if game.locality == "remote" then
+            game.host:broadcast(json.encode({message = "playerBadHit", player = self.curPlayer, hitval = self.hitval}))
+          end
+        else
+          self.assets.normalhit:play()
+          self.hittype = "normal"
+          self.hitval = love.math.random(3, 7)
+          game.scores[self.curPlayer] = game.scores[self.curPlayer] + self.hitval * 80
+          if game.locality == "remote" then
+            game.host:broadcast(json.encode({message = "playerNormalHit", player = self.curPlayer, hitval = self.hitval}))
+          end
+        end
+        self:setstate("rollhit")
+      else
+        self.cursorpos = 50 * math.cos(self.statet * 5) + 50
+      end
     end
   elseif self.state == "rollhit" then
     if self.statet >= 2 then
@@ -147,9 +256,15 @@ function BoardGame:update(dt)
         self.assets.jump:play()
         player:hopNearby(self.graph)
         self.hitval = self.hitval - 1
+        if game.locality == "remote" then
+          game.host:broadcast(json.encode({message = "playerHopNearby", player = self.curPlayer}))
+        end
       elseif status == "move" then
         self.assets.walk:play()
-        player:move(self.graph, 1)
+        player:move(self.graph)
+        if game.locality == "remote" then
+          game.host:broadcast(json.encode({message = "playerMove", player = self.curPlayer}))
+        end
         self.hitval = self.hitval - 1
       elseif status == "pick" then
         self.assets.walk:stop()
@@ -168,40 +283,76 @@ function BoardGame:update(dt)
     end
   elseif self.state == "pickmove" then
     local player = self.players[self.curPlayer]
-    if game.input.p[self.curPlayer].r == 1 and self.pickchoices.right then
-      player:moveWithChoice(self.graph, "right")
-      self.assets.walk:play()
-      self:setstate("move")
-      self.hitval = self.hitval - 1
-    elseif game.input.p[self.curPlayer].d == 1 and self.pickchoices.down then
-      player:moveWithChoice(self.graph, "down")
-      self.assets.walk:play()
-      self:setstate("move")
-      self.hitval = self.hitval - 1
-    elseif game.input.p[self.curPlayer].l == 1 and self.pickchoices.left then
-      player:moveWithChoice(self.graph, "left")
-      self.assets.walk:play()
-      self:setstate("move")
-      self.hitval = self.hitval - 1
-    elseif game.input.p[self.curPlayer].u == 1 and self.pickchoices.up then
-      player:moveWithChoice(self.graph, "up")
-      self.assets.walk:play()
-      self:setstate("move")
-      self.hitval = self.hitval - 1
+    if player.human then
+      if game.input.p[1].r == 1 and self.pickchoices.right then
+        player:moveWithChoice(self.graph, "right")
+        self.assets.walk:play()
+        self:setstate("move")
+        self.hitval = self.hitval - 1
+        if game.locality == "remote" then
+          game.host:broadcast(json.encode({message = "playerMoveWithChoice", player = self.curPlayer, choice = "right"}))
+        end
+      elseif game.input.p[1].d == 1 and self.pickchoices.down then
+        player:moveWithChoice(self.graph, "down")
+        self.assets.walk:play()
+        self:setstate("move")
+        self.hitval = self.hitval - 1
+        if game.locality == "remote" then
+          game.host:broadcast(json.encode({message = "playerMoveWithChoice", player = self.curPlayer, choice = "down"}))
+        end
+      elseif game.input.p[1].l == 1 and self.pickchoices.left then
+        player:moveWithChoice(self.graph, "left")
+        self.assets.walk:play()
+        self:setstate("move")
+        self.hitval = self.hitval - 1
+        if game.locality == "remote" then
+          game.host:broadcast(json.encode({message = "playerMoveWithChoice", player = self.curPlayer, choice = "left"}))
+        end
+      elseif game.input.p[1].u == 1 and self.pickchoices.up then
+        player:moveWithChoice(self.graph, "up")
+        self.assets.walk:play()
+        self:setstate("move")
+        self.hitval = self.hitval - 1
+        if game.locality == "remote" then
+          game.host:broadcast(json.encode({message = "playerMoveWithChoice", player = self.curPlayer, choice = "up"}))
+        end
+      end
+    else
+      if self.statet > 1 then
+        local choices = {"right", "down", "left", "up"}
+        local choice = nil
+        while self.pickchoices[choice] == nil do
+          choice = choices[love.math.random(1, 4)]
+        end
+        player:moveWithChoice(self.graph, choice)
+        self.assets.walk:play()
+        self:setstate("move")
+        self.hitval = self.hitval - 1
+        if game.locality == "remote" then
+          game.host:broadcast(json.encode({message = "playerMoveWithChoice", player = self.curPlayer, choice = choice}))
+        end
+      end
     end
   elseif self.state == "moveend" then
     if self.statet >= 1 then
       if self.curPlayer < self.numPlayers then
         self.curPlayer = self.curPlayer + 1
         self:setstate("nextplayer")
+        if game.locality == "remote" then
+          game.host:broadcast(json.encode({message = "nextPlayer", player = self.curPlayer}))
+        end
       else
         self:setstate("fadeout")
+        if game.locality == "remote" then
+          game.host:broadcast(json.encode({message = "fadeout"}))
+        end
       end
     end
   elseif self.state == "fadeout" then
     if self.statet >= 1 then
       game.scene:next(game.shoot)
     end
+    self.assets.bgm:setVolume(1 - self.statet)
   end
 
   self.camera:update(dt)
@@ -247,7 +398,7 @@ function BoardGame:drawroll(a, hit)
   local barscale = insidew / 100
 
   love.graphics.setColor(1, 1, 1, a)
-  love.graphics.print(str, 10, 10 - yoff)
+  love.graphics.print(str, 10, 30 - yoff)
   love.graphics.setColor(0, 0, 0, a)
   love.graphics.rectangle("fill", insidex, outsidey - yoff, insidew, border) --top
   love.graphics.rectangle("fill", outsidex, outsidey - yoff, border, outsideh) --left
@@ -277,6 +428,11 @@ function BoardGame:drawhit(a)
   love.graphics.printf(str, 0, game.canvash / 2 - 40, game.canvasw, "center")
 end
 
+function BoardGame:drawScore(yoff)
+  love.graphics.setColor(1, 1, 1, 1)
+  love.graphics.print(string.format("Score: %d", game.scores[self.curPlayer]), 10, 10 + yoff)
+end
+
 function BoardGame:draw()
   local screenshake = 0
   love.graphics.setCanvas(game.canvas)
@@ -300,15 +456,24 @@ function BoardGame:draw()
     self:drawstart(self.statet)
   elseif self.state == "waitplayer" then
     self:drawstart(1)
+    self:drawScore(0)
+  elseif self.state == "netwait" then
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.print(string.format("Player %d is playing.", self.curPlayer), 10, 10)
+    self:drawScore(20)
   elseif self.state == "waitfade" then
     self:drawstart(1 - self.statet)
+    self:drawScore(0)
   elseif self.state == "rollenter" then
     self:drawroll(self.statet, false)
+    self:drawScore(0)
   elseif self.state == "roll" then
     self:drawroll(1, false)
+    self:drawScore(0)
   elseif self.state == "rollhit" then
     self:drawroll(1 - self.statet, true)
     self:drawhit(1)
+    self:drawScore(0)
     local a = math.round((1 - self.statet) * 8) / 8
     if self.hittype == "good" then
       love.graphics.setColor(0.5, 1, 0.5, a)
@@ -323,6 +488,15 @@ function BoardGame:draw()
     love.graphics.rectangle("fill", 0, 0, game.canvasw, game.canvash)
   elseif self.state == "move" then
     self:drawhit(1)
+    self:drawScore(0)
+  elseif self.state == "pickmove" then
+    local player = self.players[self.curPlayer]
+    local coords = player:getMapCoords(self.assets.tileset)
+    if self.pickchoices.right then self.assets.tileset:drawTile(coords.x + mx + 32, coords.y + my - 16, 53) end
+    if self.pickchoices.down then self.assets.tileset:drawTile(coords.x + mx, coords.y + my + 16, 54) end
+    if self.pickchoices.left then self.assets.tileset:drawTile(coords.x + mx - 32, coords.y + my - 16, 55) end
+    if self.pickchoices.up then self.assets.tileset:drawTile(coords.x + mx, coords.y + my - 48, 56) end
+    self:drawScore(0)
   elseif self.state == "fadeout" then
     local a = math.round(self.statet * 8) / 8
     love.graphics.setColor(0, 0, 0, a)

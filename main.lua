@@ -1,7 +1,12 @@
+enet = require("enet")
+json = require("json")
 SceneManager = require("sceneman")
 InputManager = require("inputman")
 BoardGame = require("boardgame")
 ShootGame = require("shootgame")
+Menu = require("menu")
+JoinGameMenu = require("joingame")
+HostGameMenu = require("hostgame")
 
 -- game global
 game = {
@@ -12,13 +17,35 @@ game = {
   canvash = 288,
   canvasscale = 2,
   numPlayers = 2,
+  peerPlayers = {},
+  scores = {0, 0},
+  numPeers = 0,
+  selfPlayer = 1,
+  locality = "local",
   scene = SceneManager.new(),
   input = InputManager.new(),
   board = BoardGame.new(),
   shoot = ShootGame.new(),
+  menu = Menu.new(),
+  joingame = JoinGameMenu.new(),
+  hostgame = HostGameMenu.new(),
 }
 
-splash = require("splash")
+function game.host(address)
+  game.host = enet.host_create(address)
+end
+
+function game.join(address)
+  game.host = enet.host_create()
+  game.server = game.host:connect(address)
+end
+
+function game.setNumPlayers(numPlayers)
+  game.numPlayers = numPlayers
+  for i = 1, game.numPlayers do
+    game.scores[i] = 0
+  end
+end
 
 function math.round(n, deci)
   deci = 10^(deci or 0)
@@ -38,11 +65,15 @@ function love.load()
   game.canvas = love.graphics.newCanvas(game.canvasw, game.canvash)
 
   -- Set initial state.
-  --game.scene:next(splash)
-  game.scene:next(game.board)
+  game.scene:next(game.menu)
+end
+
+function love.textinput(t)
+  game.scene:textInput(t)
 end
 
 function love.keypressed(key, scancode, isrepeat)
+  game.scene:onKeyPressed(key, scancode, isrepeat)
   game.input:onKeyPressed(key, scancode, isrepeat)
 end
 

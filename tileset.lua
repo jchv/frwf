@@ -26,8 +26,8 @@ function TileSet.new(tileset, tilew, tileh)
   return tileset
 end
 
-function TileSet:drawTile(x, y, tile)
-  love.graphics.draw(self.img, self.quads[tile], x, y)
+function TileSet:drawTile(x, y, tile, sx, sy)
+  love.graphics.draw(self.img, self.quads[tile], x, y, 0, sx or 1, sy or sx)
 end
 
 function TileSet:drawTileLayer(layer, dx, dy)
@@ -78,6 +78,28 @@ function TileSet:getPlayerOrigins(tilemap)
   end
 
   return playerOrigins
+end
+
+local itemTiles = {33, 34}
+
+function TileSet:getItemOrigins(tilemap)
+  local itemOrigins = {}
+
+  for i, layer in pairs(tilemap.layers) do
+    for y = 1, layer.height do
+      for x = 1, layer.width do
+        local tileindex = (y - 1) * layer.width + x
+        local data = layer.data[tileindex]
+        for item, tile in pairs(itemTiles) do
+          if data == tile then
+            table.insert(itemOrigins, {x = x, y = y, item = item})
+          end
+        end
+      end
+    end
+  end
+
+  return itemOrigins
 end
 
 return TileSet

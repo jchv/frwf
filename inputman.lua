@@ -3,8 +3,8 @@ InputManager.__index = InputManager
 
 local buttons = {"a", "b", "u", "d", "l", "r"}
 local buttonMap = {
-  ["f"] = "a",
-  ["g"] = "b",
+  ["j"] = "a",
+  ["k"] = "b",
   ["w"] = "u",
   ["s"] = "d",
   ["a"] = "l",

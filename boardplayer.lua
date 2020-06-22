@@ -1,8 +1,8 @@
 local BoardPlayer = {}
 BoardPlayer.__index = BoardPlayer
 
-function BoardPlayer.new(player, coords)
-  local player = {player = player, x = coords.x, y = coords.y, x1 = coords.x, y1 = coords.y, t = 0, duration = 0, state = "idle", direction = nil}
+function BoardPlayer.new(player, coords, human)
+  local player = {player = player, x = coords.x, y = coords.y, x1 = coords.x, y1 = coords.y, t = 0, duration = 0, state = "idle", direction = nil, human = human}
   setmetatable(player, BoardPlayer)
   return player
 end
@@ -39,6 +39,14 @@ function BoardPlayer:getPickChoices(graph)
   return choices
 end
 
+function BoardPlayer:forceIdle()
+  self.x = self.x1
+  self.y = self.y1
+  self.t = 0
+  self.duration = 0
+  self.state = "idle"
+end
+
 function BoardPlayer:hopNearby(graph, duration)
   assert(self.state == "idle", "trying to hop while not idle")
 
@@ -66,7 +74,7 @@ function BoardPlayer:moveWithChoice(graph, choice, duration)
 
   self.t = 0
   self.direction = choice
-  self.duration = duration or 1
+  self.duration = duration or 0.5
   self.state = "moving"
 end
 
@@ -97,7 +105,7 @@ function BoardPlayer:move(graph, duration)
   self.x1 = moveTo.x
   self.y1 = moveTo.y
   self.t = 0
-  self.duration = duration or 1
+  self.duration = duration or 0.5
   self.state = "moving"
 end
 
