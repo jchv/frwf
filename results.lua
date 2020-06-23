@@ -64,7 +64,7 @@ function Results:update(dt)
     end
   elseif self.state == "fadeout" then
     if self.statet > 1 then
-      game.scene:next(game.menu)
+      game.reset()
     end
   end
 

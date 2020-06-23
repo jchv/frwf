@@ -54,8 +54,8 @@ function Menu:update(dt)
     end
   
     if self.selection < 0 then
-      self.selection = 3
-    elseif self.selection > 3 then
+      self.selection = 4
+    elseif self.selection > 4 then
       self.selection = 0
     end
 
@@ -64,7 +64,7 @@ function Menu:update(dt)
     end
   elseif self.state == "fadeoutmenu" then
     if self.statet > 1 then
-      if self.selection == 0 or self.selection == 1 then
+      if self.selection == 0 or self.selection == 1 or self.selection == 2 then
         self:setState("fadeinsetplayers")
       else
         self:setState("fadeout")
@@ -102,10 +102,15 @@ function Menu:update(dt)
         game.scene:next(game.board)
       elseif self.selection == 1 then
         game.setNumPlayers(self.numPlayers)
-        game.scene:next(game.hostgame)
+        game.turn = 1
+        game.numTurns = 0
+        game.scene:next(game.shoot)
       elseif self.selection == 2 then
-        game.scene:next(game.joingame)
+        game.setNumPlayers(self.numPlayers)
+        game.scene:next(game.hostgame)
       elseif self.selection == 3 then
+        game.scene:next(game.joingame)
+      elseif self.selection == 4 then
         love.event.push('quit')
       end
     end
@@ -122,10 +127,11 @@ function Menu:drawMenuItems(a, onlysel)
   onlysel = onlysel or false
   love.graphics.setColor(1, 1, 1, a)
   love.graphics.print("-", 10, 200 + 40 * self.selection)
-  if not onlysel or self.selection == 0 then love.graphics.print("Play local game (with AI)", 50, 200) end
-  if not onlysel or self.selection == 1 then love.graphics.print("Host multiplayer game", 50, 240) end
-  if not onlysel or self.selection == 2 then love.graphics.print("Join multiplayer game", 50, 280) end
-  if not onlysel or self.selection == 3 then love.graphics.print("Quit", 50, 320) end
+  if not onlysel or self.selection == 0 then love.graphics.print("Single player (with AI)", 50, 200) end
+  if not onlysel or self.selection == 1 then love.graphics.print("AI Deathmatch", 50, 240) end
+  if not onlysel or self.selection == 2 then love.graphics.print("Host multiplayer game", 50, 280) end
+  if not onlysel or self.selection == 3 then love.graphics.print("Join multiplayer game", 50, 320) end
+  if not onlysel or self.selection == 4 then love.graphics.print("Quit", 50, 360) end
 end
 
 function Menu:drawSetPlayers(a, onlysel)
@@ -134,7 +140,7 @@ function Menu:drawSetPlayers(a, onlysel)
   love.graphics.print("-", 10, 120 + 40 * self.numPlayers)
   if not onlysel or self.numPlayers == 2 then love.graphics.print("2 Players", 50, 200) end
   if not onlysel or self.numPlayers == 3 then love.graphics.print("3 Players", 50, 240) end
-  if not onlysel or self.numPlayers == 4 then love.graphics.print("4 Players", 50, 280) end
+  if not onlysel or self.numPlayers == 4 then love.graphics.print("4 Players (recommended)", 50, 280) end
 end
 
 function Menu:draw()

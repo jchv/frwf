@@ -141,7 +141,7 @@ function BoardGame:update(dt)
           self:setstate("duel")
         end
       elseif event.type == "disconnect" then
-        game.scene:next(game.menu)
+        game.reset()
       end
       event = game.host:service()
     end

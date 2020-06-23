@@ -36,6 +36,22 @@ game = {
   results = Results.new(),
 }
 
+function game.reset()
+  game.numPlayers = 2
+  game.peerPlayers = {}
+  game.shootPlayers = {{}, {}}
+  game.turn = 1
+  game.numTurns = 5
+  game.selfPlayer = 1
+  game.locality = "local"
+  game.board = BoardGame.new()
+  game.shoot = ShootGame.new()
+  game.joingame = JoinGameMenu.new()
+  game.hostgame = HostGameMenu.new()
+  game.results = Results.new()
+  game.scene:next(game.menu)
+end
+
 function game.host(address)
   game.host = enet.host_create(address)
 end
@@ -47,8 +63,11 @@ end
 
 function game.setNumPlayers(numPlayers)
   game.numPlayers = numPlayers
+  game.shootPlayers = {}
+  game.scores = {}
   for i = 1, game.numPlayers do
     game.scores[i] = 0
+    game.shootPlayers[i] = {}
   end
 end
 
@@ -63,14 +82,10 @@ function love.load()
   "ABCDEFGHIJKLMNOPQRSTUVWXYZ0" ..
   "123456789.,!?-+/():;%&`'*#=[]\"")
   love.graphics.setFont(font)
-
   love.window.setMode(game.winw, game.winh, {resizable=false, vsync=true})
   love.graphics.setDefaultFilter("nearest", "nearest", 0)
-
   game.canvas = love.graphics.newCanvas(game.canvasw, game.canvash)
-
-  game.scene:next(game.menu)
-  --game.scene:next(game.shoot)
+  game.reset()
 end
 
 function love.textinput(t)

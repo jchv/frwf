@@ -275,7 +275,7 @@ function ShootGame:update(dt)
               end
             end
           elseif event.type == "disconnect" then
-            game.scene:next(game.menu)
+            game.reset()
           end
           event = game.host:service()
         end
