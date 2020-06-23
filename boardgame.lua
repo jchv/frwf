@@ -64,6 +64,10 @@ function BoardGame:load()
     self.curPlayer = 1
   end
 
+  if game.turn > game.numTurns then
+    game.scene:next(game.results)
+  end
+
   self.state = "fadein"
   self.statet = 0
 end
@@ -408,10 +412,6 @@ function BoardGame:update(dt)
     self.assets.bgm:setVolume(1 - self.statet)
   elseif self.state == "fadeout" then
     if self.statet >= 1 then
-      if game.turn == game.numTurns then
-        game.scene:next(game.results)
-      end
-
       -- Increment turn counter.
       game.turn = game.turn + 1
 
