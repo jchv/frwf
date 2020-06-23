@@ -408,6 +408,13 @@ function BoardGame:update(dt)
     self.assets.bgm:setVolume(1 - self.statet)
   elseif self.state == "fadeout" then
     if self.statet >= 1 then
+      if game.turn == game.numTurns then
+        game.scene:next(game.results)
+      end
+
+      -- Increment turn counter.
+      game.turn = game.turn + 1
+
       -- Switch board game back to player 1.
       self.curPlayer = 1
       self.returnstate = "waitplayer"
@@ -432,7 +439,7 @@ function BoardGame:update(dt)
 end
 
 function BoardGame:drawstart(a)
-  local str = string.format("Player %d GO!", self.curPlayer)
+  local str = string.format("Player %d GO! (Turn %d of %d)", self.curPlayer, game.turn, game.numTurns)
   local yoff = math.round(math.sin(self.t) * 10)
   a = math.round(a * 8) / 8
   love.graphics.setColor(0, 0, 0, a / 2)

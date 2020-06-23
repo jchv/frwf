@@ -7,6 +7,7 @@ ShootGame = require("shootgame")
 Menu = require("menu")
 JoinGameMenu = require("joingame")
 HostGameMenu = require("hostgame")
+Results = require("results")
 
 -- game global
 game = {
@@ -20,6 +21,8 @@ game = {
   peerPlayers = {},
   shootPlayers = {{}, {}},
   scores = {0, 0},
+  turn = 1,
+  numTurns = 5,
   numPeers = 0,
   selfPlayer = 1,
   locality = "local",
@@ -30,6 +33,7 @@ game = {
   menu = Menu.new(),
   joingame = JoinGameMenu.new(),
   hostgame = HostGameMenu.new(),
+  results = Results.new(),
 }
 
 function game.host(address)
