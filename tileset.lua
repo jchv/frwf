@@ -26,6 +26,13 @@ function TileSet.new(tileset, tilew, tileh)
   return tileset
 end
 
+function TileSet:particleQuad(tile, x, y, w, h)
+  tilequad = self.quads[tile]
+  x0, y0, w0, h0 = tilequad:getViewport()
+  sw, sh = tilequad:getTextureDimensions()
+  return love.graphics.newQuad(x0 + x, y0 + y, w, h, sw, sh)
+end
+
 function TileSet:drawTile(x, y, tile, sx, sy)
   love.graphics.draw(self.img, self.quads[tile], x, y, 0, sx or 1, sy or sx)
 end

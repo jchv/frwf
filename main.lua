@@ -18,6 +18,7 @@ game = {
   canvasscale = 2,
   numPlayers = 2,
   peerPlayers = {},
+  shootPlayers = {{}, {}},
   scores = {0, 0},
   numPeers = 0,
   selfPlayer = 1,
@@ -64,8 +65,8 @@ function love.load()
 
   game.canvas = love.graphics.newCanvas(game.canvasw, game.canvash)
 
-  -- Set initial state.
   game.scene:next(game.menu)
+  --game.scene:next(game.shoot)
 end
 
 function love.textinput(t)

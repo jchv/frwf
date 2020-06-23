@@ -22,6 +22,8 @@ function ShootGame:load()
 
     -- gfx
     self.assets.tileset = TileSet.new("gfx/tileset-shoot.png", 32, 32)
+    self.assets.dustQuad = self.assets.tileset:particleQuad(51, 0, 0, 16, 16)
+    self.assets.koQuad = self.assets.tileset:particleQuad(49, 0, 16, 16, 16)
     
     -- sfx
     self.assets.jump = love.audio.newSource("sfx/jump.wav", "static")
@@ -76,7 +78,11 @@ function ShootGame:load()
   end
 
   self.projectiles = {}
+  self.projectileParticles = {}
   self.screenshake = 0
+
+  self.markers = {}
+  self.log = {}
 
   self.state = "fadein"
   self.statet = 0
@@ -116,9 +122,39 @@ function ShootGame:setState(state)
   self.statet = 0
 end
 
+function ShootGame:makeProjectileParticles()
+  psystem = love.graphics.newParticleSystem(self.assets.tileset.img, 32)
+	psystem:setParticleLifetime(0.25, 0.5) -- Particles live at least 2s and at most 5s.
+	psystem:setEmissionRate(100)
+	psystem:setSizeVariation(1)
+	psystem:setLinearAcceleration(-10, -200, 10, -100) -- Random movement in all directions.
+  psystem:setColors(1, 1, 1, 1, 1, 1, 1, 0) -- Fade to transparency.
+  psystem:setQuads(self.assets.dustQuad)
+  psystem:setSizes(0.25)
+  return psystem
+end
+
+function ShootGame:addLog(log)
+  table.insert(self.log, {log = log, t = 0})
+  if table.getn(self.log) > 8 then 
+    table.remove(self.log, 1)
+  end
+end
+
 function ShootGame:updateProjectiles(dt, factor)
   factor = factor or 1
   for i, projectile in pairs(self.projectiles) do
+    if projectile.psystem == nil then
+      projectile.psystem = self:makeProjectileParticles()
+      projectile.psystem:setPosition(projectile.x + 40, projectile.y + 38)
+      projectile.psystem:emit(10)
+      projectile.psystem:update(dt)
+      table.insert(self.projectileParticles, projectile.psystem)
+      if table.getn(self.projectileParticles) > 20 then
+        table.remove(self.projectileParticles, 1)
+      end
+    end
+
     local nearbyPlayers = nil
     for j, player in pairs(self.players) do
       if player and not (j == projectile.player) and math.abs(player.x - projectile.x) < 64 and math.abs(player.y - projectile.y) < 32 then
@@ -136,12 +172,18 @@ function ShootGame:updateProjectiles(dt, factor)
       for j = 1, 4 do
         local checkx = projectile.x + (projectile.xvel / factor * j / 4)
         for k, player in pairs(nearbyPlayers) do
+          local playerWasAlive = player.health > 0
           if player and not hit and player:checkProjectile(checkx + self.assets.tileset.tilew / 2, projectile.y + self.assets.tileset.tileh / 2, projectile.type) then
+            if playerWasAlive and player.health == 0 then
+              self:addLog(string.format("Player %d killed player %d (+500 pt)", projectile.player, player.player))
+              game.scores[projectile.player] = game.scores[projectile.player] + 500
+            end
             hit = true
             self.screenshake = self.screenshake + 8
             -- hack
             projectile.x = -100
             projectile.y = -100
+            projectile.psystem:stop()
           end
         end
       end
@@ -149,17 +191,33 @@ function ShootGame:updateProjectiles(dt, factor)
         projectile.x = projectile.x + projectile.xvel / factor
       end
     end
+    projectile.psystem:moveTo(projectile.x + 40, projectile.y + 38)
+  end
+
+  for i, projectileParticles in pairs(self.projectileParticles) do
+    projectileParticles:update(dt / factor)
+  end
+
+  for i, marker in pairs(self.markers) do
+    marker.y = marker.y - dt * 5 / factor
+    marker.t = marker.t + dt / factor
   end
 
   filterTable(self.projectiles, function(t, i, j)
     local projectile = t[i]
     if self:checkCollideAt(projectile.x + self.assets.tileset.tilew / 2, projectile.y + self.assets.tileset.tileh / 2) then
+      projectile.psystem:stop()
       return false
     end
     if projectile.x < 0 or projectile.x > self.assets.map.width * self.assets.tileset.tilew then
+      projectile.psystem:stop()
       return false
     end
     return true
+  end)
+
+  filterTable(self.markers, function(t, i, j)
+    return t[i].t < t[i].duration
   end)
 end
 
@@ -225,6 +283,11 @@ function ShootGame:update(dt)
     end
   end
 
+  for i, log in pairs(self.log) do
+    log.t = log.t + dt
+  end
+  filterTable(self.log, function(t, i, j) return t[i].t < 5 end)
+
   local oldState = self.state
 
   self.camera:update(dt)
@@ -250,6 +313,15 @@ function ShootGame:update(dt)
         self.assets.kill:play()
         self.screenshake = self.screenshake + 20
         self.players[i] = nil
+        table.insert(self.markers, {
+          img = self.assets.tileset.img,
+          quad = self.assets.koQuad,
+          t = 0,
+          duration = 3,
+          x = player.x + 16,
+          y = player.y + 16,
+        })
+        
       end
     end
 
@@ -284,6 +356,12 @@ function ShootGame:update(dt)
     end
   elseif self.state == "winenter" then
     if self.statet > 1 then
+      for i, player in pairs(self.players) do
+        if player then
+          self:addLog(string.format("Player %d wins (+2500 pt)", i))
+          game.scores[i] = game.scores[i] + 2500
+        end
+      end
       self:setState("win")
     end
   elseif self.state == "win" then
@@ -293,6 +371,7 @@ function ShootGame:update(dt)
     end
   elseif self.state == "drawenter" then
     if self.statet > 1 then
+      self:addLog(string.format("Draw."))
       self:setState("draw")
     end
   elseif self.state == "draw" then
@@ -333,6 +412,13 @@ function ShootGame:draw()
   for i, projectile in pairs(self.projectiles) do
     self.assets.tileset:drawTile(projectile.x + mx, projectile.y + my, 35)
   end
+  for i, projectileParticles in pairs(self.projectileParticles) do
+    love.graphics.draw(projectileParticles, mx, my)
+  end
+  for i, marker in pairs(self.markers) do
+    love.graphics.setColor(1, 1, 1, 1 - marker.t / marker.duration)
+    love.graphics.draw(marker.img, marker.quad, mx + marker.x, my + marker.y)
+  end
 
   if self.state == "fadein" then
     local a = math.round((1 - self.statet) * 8) / 8
@@ -360,6 +446,11 @@ function ShootGame:draw()
     y = math.random() * self.screenshake - self.screenshake / 2
   end
   love.graphics.draw(game.canvas, x, y, 0, game.canvasscale)
+
+  for i, log in pairs(self.log) do
+    love.graphics.setColor(1, 1, 1, 0.8)
+    love.graphics.print(log.log, 20, 20 + 15 * i)
+  end
 end
 
 return ShootGame
